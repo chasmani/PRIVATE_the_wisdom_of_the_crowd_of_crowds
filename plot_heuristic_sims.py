@@ -38,8 +38,6 @@ def generate_opinions(group_sizes=[], sigma_indy=1, sigma_group=1, truth=0, seed
     
     return opinions
 
-
-
 def woc(opinions):
     return np.mean(opinions)
 
@@ -319,10 +317,12 @@ def plot_from_file(keyword=None):
     central_tendency = df.groupby("bin").mean()
     variation = df.groupby("bin").std()
 
-    plt.errorbar(central_tendency[x_axis], central_tendency["woc_var"], label="WOC", fmt="x")
-    plt.errorbar(central_tendency[x_axis], central_tendency["wococ_var"], label="WOCOC", fmt="o")
+    plt.errorbar(central_tendency[x_axis], central_tendency["woc_var"], label="WOC", fmt="o")
+    plt.errorbar(central_tendency[x_axis], central_tendency["wococ_var"], label="WOCOC", fmt="x")
     plt.errorbar(central_tendency[x_axis], central_tendency["wococ_sqrt_var"], label="WOCOC SQRT", fmt="^")
     plt.errorbar(central_tendency[x_axis], central_tendency["wococ_optimal_estimated_var"], label="WOCOC Optimal w Empirical Vars", fmt="d")
+
+    
 
 
     #sns.regplot(x=x_axis, y="woc_var", data=df, label="WOC", marker="x", x_ci="sd", scatter_kws={"s": 10, "alpha":0.1})
@@ -353,7 +353,123 @@ def plot_from_file(keyword=None):
 
     plt.show()
 
+def get_T(A, inv_h, M, D):
+
+    return (1/A - inv_h)/(MD-1)
+
+
+def plot_from_file_d_h(keyword=None):
+
+
+    df = pd.read_csv("data/sims_output_basic.csv", delimiter=";", names=["keyword", "seed", "sigma_I", "sigma_G", "group_sizes", "mean_group_var", "woc_var", "wococ_var", "wococ_sqrt_var", "wococ_optimal_var", "wococ_optimal_estimated_var"])
+
+    if keyword:
+        df = df[df["keyword"]==keyword]
+
+    # Get unique rows
+    df = df.drop_duplicates()
+
+    # eval group sizes as numpy list
+    df["group_sizes"] = df['group_sizes'].str.strip('[]').str.split().apply(lambda x: np.array(x, dtype=int))
+       
+    # Get std of inverse group sizes
+    # Get inverse group sizes
+    df["inv_group_sizes"] = df["group_sizes"].apply(lambda x: 1/x)
+    df["inverse_harmonic"] = df["inv_group_sizes"].apply(lambda x: np.mean(x))
+
+    df["squared_group_sizes"] = df["group_sizes"].apply(lambda x: np.sum(x**2))
+    df["simpson_diversity"] = df["squared_group_sizes"] / df["group_sizes"].apply(lambda x: np.sum(x))**2
+
+    df["M"] = df["group_sizes"].apply(lambda x: len(x))
+    df["N"] = df["group_sizes"].apply(lambda x: np.sum(x))
+
+    df["T"] = (df["inverse_harmonic"]- df["M"]/df["N"])/(df["M"]*df["simpson_diversity"]-1)
+
+
+
+    df["rho_normed"] = (df["sigma_G"]**2 / df["sigma_I"]**2) * 1/df["T"]
+
+    # Remove rho_normed zero values
+    df = df[df["rho_normed"] != 0]
+
+    # Normalise variances by dividing by wococ_optimal_var
+    
+    df["woc_var"] = df["woc_var"] / df["wococ_optimal_var"]
+    df["wococ_var"] = df["wococ_var"] / df["wococ_optimal_var"]
+    df["wococ_sqrt_var"] = df["wococ_sqrt_var"] / df["wococ_optimal_var"]
+    df["wococ_optimal_estimated_var"] = df["wococ_optimal_estimated_var"] / df["wococ_optimal_var"]
+    
+    x_axis = "rho_normed"
+
+    # Plot hitograms with central tendency and variation in bins
+    #sns.histplot(df, x=x_axis, y="woc_var", bins=100, kde=True, label="WOC", color="blue")
+    #sns.histplot(df, x=x_axis, y="wococ_var", bins=100, kde=True, label="WOCOC", color="red")
+
+    # Drop NA
+    df.dropna()
+    
+
+
+
+    # Create log bins along x-axis 
+    bins = np.logspace(np.log10(df[x_axis].min()), np.log10(df[x_axis].max()), 100)
+    print(bins)
+
+    print(df[x_axis].min(), df[x_axis].max())
+    
+    df["bin"] = np.digitize(df[x_axis], bins)
+
+
+    
+
+    # Get central tendency and variation in each bin
+    central_tendency = df.groupby("bin").mean()
+    variation = df.groupby("bin").std()
+    print(central_tendency)
+
+    plt.errorbar(central_tendency[x_axis], central_tendency["woc_var"], label="Flat Mean", fmt="x")
+    plt.errorbar(central_tendency[x_axis], central_tendency["wococ_var"], label="Crowd of Crowds", fmt="o")
+    plt.errorbar(central_tendency[x_axis], central_tendency["wococ_sqrt_var"], label="WOCOC SQRT", fmt="^")
+
+
+    """
+    plt.errorbar(central_tendency[x_axis], central_tendency["woc_var"], yerr=variation["woc_var"], label="Flat Mean", fmt="x")
+    plt.errorbar(central_tendency[x_axis], central_tendency["wococ_var"], yerr=variation["wococ_var"], label="Crowd of Crowds", fmt="o")
+    plt.errorbar(central_tendency[x_axis], central_tendency["wococ_sqrt_var"], yerr=variation["wococ_sqrt_var"], label="WOCOC SQRT", fmt="^")
+    """
+    #plt.errorbar(central_tendency[x_axis], central_tendency["wococ_optimal_estimated_var"], label="Plug-In", fmt="d")
+
+
+
+    #sns.regplot(x=x_axis, y="woc_var", data=df, label="WOC", marker="x", x_ci="sd", scatter_kws={"s": 10, "alpha":0.1})
+    #sns.regplot(x=x_axis, y="wococ_var", data=df, label="WOCOC", marker="o", x_ci="sd", scatter_kws={"s": 10, "alpha":0.1})
+    #sns.regplot(x=x_axis, y="wococ_sqrt_var", data=df, label="WOCOC SQRT", marker="^", x_ci="sd", scatter_kws={"s": 10, "alpha":0.1})
+    #sns.regplot(x=x_axis, y="wococ_optimal_estimated_var", data=df, label="WOCOC Optimal w Empirical Vars", marker="d", x_ci="sd", scatter_kws={"s": 10, "alpha":0.1})
+
+
+    #plt.scatter(df[x_axis], df["woc_var"], label="WOC", marker="x", s=5, alpha=0.2)
+    #plt.scatter(df[x_axis], df["wococ_var"], label="WOCOC", marker="o", s=5, alpha=0.2)
+    #plt.scatter(df[x_axis], df["wococ_sqrt_var"], label="WOCOC SQRT", marker="^", s=5, alpha=0.2)
+    #plt.scatter(df[x_axis], df["wococ_optimal_estimated_var"], label="WOCOC Optimal w Empirical Vars", marker="d", s=5, alpha=0.2)
+
+    # Plot scatterplots with line fits
+    #plt.scatter(df[x_axis], df["woc_var"], label="WOC", marker="x")
+
+    plt.xlabel(r"$\frac{\sigma_I^2}{\sigma_G^2} \frac{MD - 1}{\frac{1}{H} - \frac{M}{N}}$")
+
+    plt.ylabel(r"Relative variance (compared to optimal weighting)")
+    plt.legend()
+
+    # log scale x axis
+    plt.xscale("log")
+    plt.yscale("log")
+
+    plt.savefig("images/sims_bins_all_relative_var.png", dpi=300)
+
+
+    plt.show()
+
 
 if __name__=="__main__":
     #sim_and_save_many()
-    plot_from_file()
+    plot_from_file_d_h()

@@ -115,7 +115,7 @@ def sim_lots(n_sims):
 
     group_sizes = [1,2,1,3,1]*20
     sigma_indy = 1
-    sigma_group = 0.1
+    sigma_group = 0.3
     truth = 0
 
     for seed in range(n_sims):
@@ -135,17 +135,67 @@ def sim_lots(n_sims):
     var_woc = np.var(wocs, ddof=1)
     var_wococ = np.var(wococs, ddof=1)
 
-    print(var_woc, var_wococ)
 
+    print("WOC Empirical simulated variance: ", var_woc)
+
+    print("WOC anaytical variance: ")
     print(get_variance_woc(group_sizes, sigma_indy, sigma_group))
     print(get_variance_woc_new(group_sizes, sigma_indy, sigma_group))
     print(get_variance_woc_new_2(group_sizes, sigma_indy, sigma_group))
+    print("S preidtced variance: ")
+    print(get_variance_woc_S(group_sizes, sigma_indy, sigma_group))
+    print("CV predicted variance: ")
+    print(get_variance_woc_cv(group_sizes, sigma_indy, sigma_group))
+
+    print("WOCOC Empirical simulated variance: ", var_wococ)
+    print("WOCOC anaytical variance: ")
     print(get_variance_wococ(group_sizes, sigma_indy, sigma_group))
     print(get_variance_wococ_new(group_sizes, sigma_indy, sigma_group))
     print(get_variance_wococ_new_2(group_sizes, sigma_indy, sigma_group))
+    print("WOCOC H predicted variance: ")
+    print(get_variance_wococ_H(group_sizes, sigma_indy, sigma_group))
 
 
-    plt.show()
+    print("var_flat_over_var_coc = ", get_variance_woc(group_sizes, sigma_indy, sigma_group) / 
+          get_variance_wococ(group_sizes, sigma_indy, sigma_group))
+    print(get_variance_ratio_flat_over_coc(group_sizes, sigma_indy, sigma_group))
+    print(get_variance_ratio_coc_over_flat(group_sizes, sigma_indy, sigma_group))
+
+    N = sum(group_sizes)
+    M = len(group_sizes)
+    D = np.sum([n_j**2 for n_j in group_sizes]) / sum(group_sizes)**2
+    H_inv = np.mean([1/n_j for n_j in group_sizes])
+    rho = sigma_indy**2 / sigma_group**2
+
+    print("var_flat_over_var_coc compressed = ", get_var_ratio_coc_over_flat_compressed(N, M, D, H_inv, rho))
+
+
+def get_variance_ratio_flat_over_coc(group_sizes, sigma_indy, sigma_group):
+
+    mean_group_sizes = np.mean(group_sizes)
+    mean_squared_group_sizes = np.mean([n_j**2 for n_j in group_sizes])
+    mean_inverse_group_sizes = np.mean([1/n_j for n_j in group_sizes])
+    
+    NUMERATOR = 1/mean_group_sizes + mean_squared_group_sizes / mean_group_sizes**2 * sigma_group**2/ sigma_indy**2
+    DENOMINATOR = mean_inverse_group_sizes + sigma_group**2 / sigma_indy**2
+    return NUMERATOR / DENOMINATOR
+    
+def get_variance_ratio_coc_over_flat(group_sizes, sigma_indy, sigma_group):
+
+    mean_group_sizes = np.mean(group_sizes)
+    mean_squared_group_sizes = np.mean([n_j**2 for n_j in group_sizes])
+    mean_inverse_group_sizes = np.mean([1/n_j for n_j in group_sizes])
+    
+    NUMERATOR = mean_inverse_group_sizes + sigma_group**2 / sigma_indy**2
+    DENOMINATOR = 1/mean_group_sizes + mean_squared_group_sizes / mean_group_sizes**2 * sigma_group**2/ sigma_indy**2
+    return NUMERATOR / DENOMINATOR
+
+def get_var_ratio_coc_over_flat_compressed(N, M, D, H_inv, rho):
+
+    A = N/M
+    numerator = rho*H_inv + 1
+    denominator = rho/A + M*D
+    return numerator / denominator
 
 def get_variance_woc(group_sizes, sigma_a, sigma_b):
 
@@ -193,6 +243,38 @@ def get_variance_woc_new_2(group_sizes, sigma_a, sigma_b):
     return variance_indy_component + variance_group_component
 
 
+def get_variance_woc_S(group_sizes, sigma_I, sigma_G):
+
+    n = sum(group_sizes)
+    m = len(group_sizes)
+
+    sum_nj_squared = sum([n_j**2 for n_j in group_sizes])
+
+    S = sum_nj_squared/n**2 - 1/m
+
+
+    variance_indy_component = 1/n * sigma_I**2
+    variance_group_component = S* sigma_G** 2 + (1/m) * sigma_G** 2
+
+    return variance_indy_component + variance_group_component
+
+def get_variance_woc_cv(group_sizes, sigma_I, sigma_G):
+
+    n = sum(group_sizes)
+    m = len(group_sizes)
+
+    var_nj = np.var(group_sizes, ddof=0)
+
+    S = m/n**2 * var_nj
+
+    cv_nj = np.sqrt(var_nj) / (n/m)
+
+    variance_indy_component = 1/n * sigma_I**2
+    variance_group_component = (1/m) * sigma_G** 2 + 1/m * cv_nj**2 * sigma_G** 2
+
+    return variance_indy_component + variance_group_component
+
+    
 def get_variance_wococ_new(group_sizes, sigma_a, sigma_b):
 
     n = sum(group_sizes)
@@ -217,6 +299,20 @@ def get_variance_wococ_new_2(group_sizes, sigma_a, sigma_b):
 
     return variance_indy_component + variance_group_component
 
+def get_variance_wococ_H(group_sizes, sigma_I, sigma_G):
+
+    n = sum(group_sizes)
+    m = len(group_sizes)
+
+    sum_inverse_nj = sum([1/n_j for n_j in group_sizes])
+
+    H = sum_inverse_nj/m**2 - 1/n
+
+    variance_indy_component =  H * sigma_I**2  +  1/n * sigma_I**2
+    variance_group_component = (1/m) * sigma_G** 2
+
+    return variance_indy_component + variance_group_component
+
 
 def get_variance(group_sizes, group_weights, sigma_i, sigma_j):
 
@@ -235,7 +331,6 @@ def get_variance_2(group_sizes, group_weights, sigma_i, sigma_j):
     M = len(group_sizes)
 
     betas = N / group_sizes
-    print(betas)
 
     variance_indy_componnent = 1/N * np.sum(betas * group_weights**2) * sigma_i**2
     variance_group_component = np.sum(group_weights**2) * sigma_j**2
@@ -248,7 +343,6 @@ def get_variance_3(group_sizes, group_weights, sigma_i, sigma_j):
     M = len(group_sizes)
 
     betas = N / group_sizes
-    print(betas)
 
     sigma_w = np.std(group_weights)
 
@@ -263,7 +357,6 @@ def get_variance_4(group_sizes, group_weights, sigma_i, sigma_j):
     M = len(group_sizes)
 
     betas = N / group_sizes
-    print(betas)
 
     sigma_w = np.std(group_weights)
 
@@ -284,11 +377,6 @@ def get_variance_5(group_sizes, group_weights, sigma_i, sigma_j):
 
 
     cov_beta_w_squared = np.cov(betas, group_weights**2, bias=True)[0,1]
-
-    print(sigma_w)
-    print(cov_beta_w_squared)
-
-    print(sigma_i, np.mean(betas), sigma_j, M)
 
     return (sigma_i**2 * np.mean(betas) + sigma_j**2) * (1/M + M * sigma_w**2) + sigma_i**2 * M * cov_beta_w_squared
 
@@ -319,16 +407,19 @@ def test_general_equation():
 
     group_weights_woc = group_sizes/sum(group_sizes)
 
+    print("Variance with WOC weights:")
     print(get_variance(group_sizes, group_weights_woc, sigma_i, sigma_j))
     print(get_variance_woc(group_sizes, sigma_i, sigma_j))
 
     group_weights_wococ = np.ones(len(group_sizes))/len(group_sizes)
 
+    print("Variance with WOCOC weights:")
     print(get_variance(group_sizes, group_weights_wococ, sigma_i, sigma_j))
     print(get_variance_wococ(group_sizes, sigma_i, sigma_j))
 
     group_weights_square_root = np.sqrt(group_sizes)/np.sum(np.sqrt(group_sizes))
 
+    print("Variance with square root weights:")
     print(get_variance(group_sizes, group_weights_square_root, sigma_i, sigma_j))
 
     print(get_variance_2(group_sizes, group_weights_square_root, sigma_i, sigma_j))
@@ -341,12 +432,13 @@ def test_general_equation():
 
     group_sizes = np.array([1,1,2,1])
     group_weights = np.array([0.25, 0.25, 0.25, 0.25])
-    
+
+    print("Variance with equal weights:")    
     group_weights_normed = group_weights/np.sum(group_weights)
     print(get_variance_5(group_sizes, group_weights_normed, sigma_i, sigma_j))
 
     group_weights = np.array([0.2, 0.2, 0.4, 0.2])
-    print(group_weights**2)
+    print("Variance with unequal weights:")
 
     group_weights_normed = group_weights/np.sum(group_weights)
     print(get_variance_5(group_sizes, group_weights_normed, sigma_i, sigma_j))
@@ -354,4 +446,5 @@ def test_general_equation():
 
 
 
-test_general_equation()
+
+sim_lots(1000)
